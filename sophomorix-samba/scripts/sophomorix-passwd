@@ -698,6 +698,19 @@ if ($userlist_count>0 and ($password ne "" or
         &AD_debug_logdump($mesg,2,(caller(0))[3]);
         my $max = $mesg->count;
 	if ($max==1){
+            # --random gives a number of characters, which makes no sense for
+            # a dice password: refused for the users of such a file
+            if ($random!=0){
+                my $file_AD=(&AD_get_user({ldap=>$ldap,
+                                           root_dse=>$root_dse,
+                                           root_dns=>$root_dns,
+                                           user=>$userlist_user,
+                                          }))[19];
+                if (($sophomorix_config{'FILES'}{'USER_FILE'}{$file_AD}{'RANDOM_PWD'} // "") eq "dice"){
+                    print "ERROR: $userlist_user gets dice passwords ($file_AD), --random is not possible: use --configfile\n";
+                    next;
+                }
+            }
             # create pasword for each user
             if ($random!=0 and $common==0){
                 $password=&create_plain_password("TRUE",$random,"",@password_chars);
