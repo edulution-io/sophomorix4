@@ -4140,11 +4140,16 @@ sub read_ui {
               -handle_trailing_comment => 1,
             );
     } else {
-        print "\n";
-        print "ERROR: UI config file not found:\n";
-        print "       $file\n";
-        print "\n";
-        exit;
+        # edulution fork: linuxmuster-webui7 is not installed, and it was the
+        # webui's postinst that generated this file. Nothing in the edulution
+        # stack reads the webui permissions (linuxmuster-api has its own
+        # permissions.yml), so without the file sophomorix simply calculates
+        # none: sophomorixWebuiPermissionsCalculated stays empty.
+        # Upstream stops here with "exit" - exit code 0 - which made every
+        # sophomorix command a silent no-op, linuxmuster-setup included.
+        # A host that still carries the webui keeps its permissions.
+        &print_title("$file not found, skipping webui permissions","slim");
+        return;
     }
 
     # Test config file for double module paths
