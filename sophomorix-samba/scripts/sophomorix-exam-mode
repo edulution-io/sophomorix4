@@ -250,6 +250,12 @@ if ($unset_exam_mode==1){
         exit 88;
     }
 
+    # escape subdir name
+    if (defined $subdir and not $subdir=~m/^[A-Za-z0-9_\-\/]+$/){
+        print "\nERROR: --subdir may only contain A-Z, a-z, 0-9, _, - and /\n\n";
+        exit 88;
+    }
+
     my @participants=split(/,/,$participants);
     my $user_count=0;
     my $max_user_count=$#participants+1;
@@ -261,14 +267,11 @@ if ($unset_exam_mode==1){
         # collect data
         if ($sophomorix_config{'INI'}{'EXAMMODE'}{'COLLECT_BEFORE_KILL'} eq "TRUE"){
             my $examuser=$participant.$sophomorix_config{'INI'}{'EXAMMODE'}{'USER_POSTFIX'};
-            my $command;
+            my @command=("/usr/sbin/sophomorix-transfer", "--copy-account-data", "--collect-copy-exam", $examuser);
             if (defined $subdir){
-                $command="/usr/sbin/sophomorix-transfer --copy-account-data --collect-copy-exam ".$examuser." --subdir ".$subdir;
-            } else {
-                $command="/usr/sbin/sophomorix-transfer --copy-account-data --collect-copy-exam ".$examuser;
-
+                push @command, "--subdir", $subdir;
             }
-            &call_sophomorix_command($Conf::log_level,$json,$command);
+            &call_sophomorix_command($Conf::log_level,$json,\@command);
         }
         my $ret=&AD_user_unset_exam_mode({ldap=>$ldap,
                                           root_dse=>$root_dse,
@@ -319,9 +322,8 @@ if ($reset_all_exam_mode_users==1){
         print "WARNING: No examusers found in school $school\n";
     } else {
         my $participants=join(",",@{ $ref_examusers->{'LISTS'}{'EXAMUSER_by_sophomorixSchoolname'}{$school}{'examuser'} } );
-        my $command="/usr/sbin/sophomorix-exam-mode --unset --subdir transfer --participants ".$participants;
-        #print $command."\n";
-        &call_sophomorix_command($Conf::log_level,$json,$command);
+        my @command=("/usr/sbin/sophomorix-exam-mode", "--unset", "--subdir", "transfer", "--participants", $participants);
+        &call_sophomorix_command($Conf::log_level,$json,\@command);
     }
     &AD_unbind_admin($ldap);
     &log_script_end(\@arguments,\%sophomorix_result,\%sophomorix_config,$json);
