@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # call this script with:
 # /usr/sbin/sophomorix-vampire-pwdconvert <sambantpassword>
 # this returns the unicodePwd to stdout
@@ -7,4 +7,4 @@ import binascii
 import sys
 ldap_samba_nt_password = sys.argv[1]
 b64_hash = base64.b64encode(binascii.a2b_hex(ldap_samba_nt_password))
-print b64_hash
+print(b64_hash.decode())
