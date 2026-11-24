@@ -14,33 +14,6 @@ Description: Sophomorix for Samba 4
  sophomorix-samba is a user management tool for Samba 4
 
 
-Package: sophomorix-developer
-Architecture: all
-Depends:  sophomorix-samba (>= 1:7.4.7~), ldap-utils, cloc, make
-Description: Test suite for sophomorix-samba
- Scripts to test sophomorix-samba  on a runnig system. These scripts can 
- screw up your server!
-
-Package: sophomorix-vampire
-Architecture: all
-Depends:  sophomorix-samba (>= 1:7.4.7~), ldap-utils
-Description: Migration vampire script
- Script to such users, classes, projects and workstations from a dump
- with sophomorix-dump
-
-Package: sophomorix-dump
-Architecture: all
-Depends:  
-Description: Migration dump script
- Script to dump users, classes, projects a nd workstations from
- linuxmusternet6 server
-
-Package: sophomorix-belwue-mail
-Architecture: all
-Depends: sophomorix-samba (>= 1:7.4.7~), libhtml-tableextract-perl
-Description: Reading external Mail data at Belwue and suggest actions
-
-
 #Package: sophomorix-doc-html
 #Architecture: all
 #Depends: 

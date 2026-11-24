@@ -60,10 +60,6 @@ install: build
 #	$(MAKE) install-sys-files DESTDIR=$(CURDIR)/debian/sophomorix4
 #	$(MAKE) install-pgldap DESTDIR=$(CURDIR)/debian/sophomorix4
 #	$(MAKE) install-sys-pgldap DESTDIR=$(CURDIR)/debian/sophomorix4
-	$(MAKE) install-developer DESTDIR=$(CURDIR)/debian/sophomorix-developer
-	$(MAKE) install-vampire DESTDIR=$(CURDIR)/debian/sophomorix-vampire
-	$(MAKE) install-dump DESTDIR=$(CURDIR)/debian/sophomorix-dump
-	$(MAKE) install-belwue-mail DESTDIR=$(CURDIR)/debian/sophomorix-belwue-mail
 #	$(MAKE) install-virusscan DESTDIR=$(CURDIR)/debian/sophomorix4
 #	$(MAKE) doc DESTDIR=$(CURDIR)/debian/sophomorix4
 
