@@ -589,10 +589,20 @@ sub latex {
     system($dvips_command);
 
     &print_title("ps2pdf is creating $output_file_basename.pdf");
+    # The AppArmor profile of gs (Ubuntu 26.04) does not allow ps2pdf to create
+    # files in PRINT_PATH, so ps2pdf only gets pipes
+    my $ps2pdf_stderr=$dev_null eq "" ? "" : "2>/dev/null ";
     my $ps2pdf_command="cd $sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}; ".
-	              "$sophomorix_config{'INI'}{'LATEX'}{'BIN_PS2PDF'} ".$output_file_basename.".ps ".$dev_null;
+	              "cat ".$output_file_basename.".ps | ".
+	              "$sophomorix_config{'INI'}{'LATEX'}{'BIN_PS2PDF'} - - ".$ps2pdf_stderr.
+	              "| cat > ".$output_file_basename.".pdf";
     print "  * $ps2pdf_command\n";
     system($ps2pdf_command);
+    # the last cat creates the file even if ps2pdf failed
+    my $pdf_file="$sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/$output_file_basename.pdf";
+    if (-z $pdf_file){
+        unlink $pdf_file;
+    }
 
     # clean up
     system("rm -f $sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/$output_file_basename.log $dev_null");
