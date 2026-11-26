@@ -80,6 +80,9 @@ my $info=0;
 my $caller="";
 my $caller_copy="";
 my $command="latex";
+# Set when no PDF could be created, the script ends with an error after the
+# output files were made read-only
+my $build_error="";
 
 # entries selections
 my $user="";
@@ -167,6 +170,7 @@ The user given by option --caller/--caller-copy must exist!
 Choose the way of pdf generation:
   --command latex      (This is the default: *.tex ->latex->dvips->ps2pdf->*.pdf)
   --command pdflatex   (*.tex->pdflatex->*.pdf)
+  --command none       (only the csv files, LaTeX is not run)
 
 Examples to print a school:
   sophomorix-print  (print the school default-school)
@@ -423,6 +427,7 @@ if ($class eq "" and $user eq "" and not defined $back_in_time){
     &close_output_files($output_file_basename);
     &build_results; 
     &make_output_files_ro;
+    &exit_on_build_error;
 
 } elsif ($class ne ""){
     # --class <class1><class2>,...one ore commaseperated class/classes are given
@@ -460,6 +465,7 @@ if ($class eq "" and $user eq "" and not defined $back_in_time){
     &close_output_files($output_file_basename);
     &build_results; 
     &make_output_files_ro;
+    &exit_on_build_error;
 
 } elsif ($user ne ""){
     # --user <user1><user2>,... are given
@@ -488,6 +494,7 @@ if ($class eq "" and $user eq "" and not defined $back_in_time){
     &close_output_files($output_file_basename);
     &build_results; 
     &make_output_files_ro;
+    &exit_on_build_error;
 
 } elsif (defined $back_in_time) {
     if ($back_in_time > $ref_AD_printdata->{'RESULT'}{'BACK_IN_TIME_MAX'}){
@@ -514,6 +521,7 @@ if ($class eq "" and $user eq "" and not defined $back_in_time){
     &close_output_files($output_file_basename);
     &build_results; 
     &make_output_files_ro;
+    &exit_on_build_error;
 
 } else {
     print "\nERROR: I don't know what to print\n\n";
@@ -571,8 +579,8 @@ sub pdflatex {
     system($pdflatex_command); # 2x, to create table of contents correctly
     if (not -s "$sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/$output_file_basename.pdf"){
         unlink "$sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/$output_file_basename.pdf";
-        &log_script_exit("pdflatex could not create $output_file_basename.pdf",1,1,0,
-                         \@arguments,\%sophomorix_result,\%sophomorix_config,$json);
+        $build_error="pdflatex could not create $output_file_basename.pdf";
+        return;
     }
 
     # clean up
@@ -629,8 +637,8 @@ sub latex {
     my $pdf_file="$sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/$output_file_basename.pdf";
     if (not defined $ps2pdf_status or $ps2pdf_status ne "0" or -z $pdf_file){
         unlink $pdf_file;
-        &log_script_exit("ps2pdf could not convert $output_file_basename.ps (exit status: $ps2pdf_status)",1,1,0,
-                         \@arguments,\%sophomorix_result,\%sophomorix_config,$json);
+        $build_error="ps2pdf could not convert $output_file_basename.ps (exit status: $ps2pdf_status)";
+        return;
     }
 
     # clean up
@@ -653,6 +661,8 @@ sub build_results {
     } elsif ($command eq "latex"){
         # higher quality
         &latex;
+    } elsif ($command eq "none"){
+        &print_title("No PDF is created (--command none)");
     } else {
         print "\nI do not know how to process the file ($command ?)\n\n";
     }
@@ -667,6 +677,17 @@ sub make_output_files_ro {
     system("chown $caller $sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/${output_file_basename}.* $dev_null");
     system("chown $caller $sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/${output_file_basename}-* $dev_null");
     system("chown $caller $sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/${output_file_basename}_* $dev_null");
+}
+
+
+
+sub exit_on_build_error {
+    # Only after make_output_files_ro: the csv files with the passwords must
+    # not stay readable when the PDF failed
+    if ($build_error ne ""){
+        &log_script_exit($build_error,1,1,0,
+                         \@arguments,\%sophomorix_result,\%sophomorix_config,$json);
+    }
 }
 
 
