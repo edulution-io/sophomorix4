@@ -569,6 +569,11 @@ sub pdflatex {
     print "  * $pdflatex_command\n";
     system($pdflatex_command);
     system($pdflatex_command); # 2x, to create table of contents correctly
+    if (not -s "$sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/$output_file_basename.pdf"){
+        unlink "$sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/$output_file_basename.pdf";
+        &log_script_exit("pdflatex could not create $output_file_basename.pdf",1,1,0,
+                         \@arguments,\%sophomorix_result,\%sophomorix_config,$json);
+    }
 
     # clean up
     system("rm -f $sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/$output_file_basename.log $dev_null");
@@ -603,16 +608,29 @@ sub latex {
     # The AppArmor profile of gs (Ubuntu 26.04) does not allow ps2pdf to create
     # files in PRINT_PATH, so ps2pdf only gets pipes
     my $ps2pdf_stderr=$dev_null eq "" ? "" : "2>/dev/null ";
+    # The exit status of a pipe is the one of its last command: ps2pdf writes
+    # its own one to a file, which the shell creates
+    my $ps2pdf_status_file="$sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/$output_file_basename.ps2pdf-status";
     my $ps2pdf_command="cd $sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}; ".
-	              "cat ".$output_file_basename.".ps | ".
+	              "{ cat ".$output_file_basename.".ps | ".
 	              "$sophomorix_config{'INI'}{'LATEX'}{'BIN_PS2PDF'} - - ".$ps2pdf_stderr.
+	              "; echo \$? > ".$output_file_basename.".ps2pdf-status; } ".
 	              "| cat > ".$output_file_basename.".pdf";
     print "  * $ps2pdf_command\n";
     system($ps2pdf_command);
+    my $ps2pdf_status="";
+    if (open(my $status_fh, "<", $ps2pdf_status_file)){
+        $ps2pdf_status=<$status_fh>;
+        close($status_fh);
+        chomp($ps2pdf_status) if defined $ps2pdf_status;
+    }
+    unlink $ps2pdf_status_file;
     # the last cat creates the file even if ps2pdf failed
     my $pdf_file="$sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/$output_file_basename.pdf";
-    if (-z $pdf_file){
+    if (not defined $ps2pdf_status or $ps2pdf_status ne "0" or -z $pdf_file){
         unlink $pdf_file;
+        &log_script_exit("ps2pdf could not convert $output_file_basename.ps (exit status: $ps2pdf_status)",1,1,0,
+                         \@arguments,\%sophomorix_result,\%sophomorix_config,$json);
     }
 
     # clean up
