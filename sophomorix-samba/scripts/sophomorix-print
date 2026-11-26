@@ -80,6 +80,9 @@ my $info=0;
 my $caller="";
 my $caller_copy="";
 my $command="latex";
+# Set when no PDF could be created, the script ends with an error after the
+# output files were made read-only
+my $build_error="";
 
 # entries selections
 my $user="";
@@ -167,6 +170,7 @@ The user given by option --caller/--caller-copy must exist!
 Choose the way of pdf generation:
   --command latex      (This is the default: *.tex ->latex->dvips->ps2pdf->*.pdf)
   --command pdflatex   (*.tex->pdflatex->*.pdf)
+  --command none       (only the csv files, LaTeX is not run)
 
 Examples to print a school:
   sophomorix-print  (print the school default-school)
@@ -423,6 +427,7 @@ if ($class eq "" and $user eq "" and not defined $back_in_time){
     &close_output_files($output_file_basename);
     &build_results; 
     &make_output_files_ro;
+    &exit_on_build_error;
 
 } elsif ($class ne ""){
     # --class <class1><class2>,...one ore commaseperated class/classes are given
@@ -460,6 +465,7 @@ if ($class eq "" and $user eq "" and not defined $back_in_time){
     &close_output_files($output_file_basename);
     &build_results; 
     &make_output_files_ro;
+    &exit_on_build_error;
 
 } elsif ($user ne ""){
     # --user <user1><user2>,... are given
@@ -488,6 +494,7 @@ if ($class eq "" and $user eq "" and not defined $back_in_time){
     &close_output_files($output_file_basename);
     &build_results; 
     &make_output_files_ro;
+    &exit_on_build_error;
 
 } elsif (defined $back_in_time) {
     if ($back_in_time > $ref_AD_printdata->{'RESULT'}{'BACK_IN_TIME_MAX'}){
@@ -514,6 +521,7 @@ if ($class eq "" and $user eq "" and not defined $back_in_time){
     &close_output_files($output_file_basename);
     &build_results; 
     &make_output_files_ro;
+    &exit_on_build_error;
 
 } else {
     print "\nERROR: I don't know what to print\n\n";
@@ -552,13 +560,28 @@ if ($caller_copy ne ""){
 # Subroutines
 # ===========================================================================
 
+sub remove_old_output {
+    # If the compilation fails, the result of a previous run must not be used
+    foreach my $extension (@_){
+        unlink "$sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/$output_file_basename.$extension";
+    }
+}
+
+
+
 sub pdflatex {
+    &remove_old_output("pdf");
     &print_title("pdflatex is creating $output_file_basename.pdf");
     my $pdflatex_command="cd $sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}; ".
 	                 "$sophomorix_config{'INI'}{'LATEX'}{'BIN_PDFLATEX'} ".$output_file_basename.".tex ".$dev_null;
     print "  * $pdflatex_command\n";
     system($pdflatex_command);
     system($pdflatex_command); # 2x, to create table of contents correctly
+    if (not -s "$sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/$output_file_basename.pdf"){
+        unlink "$sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/$output_file_basename.pdf";
+        $build_error="pdflatex could not create $output_file_basename.pdf";
+        return;
+    }
 
     # clean up
     system("rm -f $sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/$output_file_basename.log $dev_null");
@@ -573,6 +596,7 @@ sub pdflatex {
 
 
 sub latex {
+    &remove_old_output("dvi","ps","pdf");
     &print_title("Processing $sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/$output_file_basename.tex");
     &print_title("latex is creating $output_file_basename.dvi");
     # PS aus $output_file_basename.tex erzeugen
@@ -589,10 +613,33 @@ sub latex {
     system($dvips_command);
 
     &print_title("ps2pdf is creating $output_file_basename.pdf");
+    # The AppArmor profile of gs (Ubuntu 26.04) does not allow ps2pdf to create
+    # files in PRINT_PATH, so ps2pdf only gets pipes
+    my $ps2pdf_stderr=$dev_null eq "" ? "" : "2>/dev/null ";
+    # The exit status of a pipe is the one of its last command: ps2pdf writes
+    # its own one to a file, which the shell creates
+    my $ps2pdf_status_file="$sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/$output_file_basename.ps2pdf-status";
     my $ps2pdf_command="cd $sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}; ".
-	              "$sophomorix_config{'INI'}{'LATEX'}{'BIN_PS2PDF'} ".$output_file_basename.".ps ".$dev_null;
+	              "{ cat ".$output_file_basename.".ps | ".
+	              "$sophomorix_config{'INI'}{'LATEX'}{'BIN_PS2PDF'} - - ".$ps2pdf_stderr.
+	              "; echo \$? > ".$output_file_basename.".ps2pdf-status; } ".
+	              "| cat > ".$output_file_basename.".pdf";
     print "  * $ps2pdf_command\n";
     system($ps2pdf_command);
+    my $ps2pdf_status="";
+    if (open(my $status_fh, "<", $ps2pdf_status_file)){
+        $ps2pdf_status=<$status_fh>;
+        close($status_fh);
+        chomp($ps2pdf_status) if defined $ps2pdf_status;
+    }
+    unlink $ps2pdf_status_file;
+    # the last cat creates the file even if ps2pdf failed
+    my $pdf_file="$sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/$output_file_basename.pdf";
+    if (not defined $ps2pdf_status or $ps2pdf_status ne "0" or -z $pdf_file){
+        unlink $pdf_file;
+        $build_error="ps2pdf could not convert $output_file_basename.ps (exit status: $ps2pdf_status)";
+        return;
+    }
 
     # clean up
     system("rm -f $sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/$output_file_basename.log $dev_null");
@@ -614,6 +661,8 @@ sub build_results {
     } elsif ($command eq "latex"){
         # higher quality
         &latex;
+    } elsif ($command eq "none"){
+        &print_title("No PDF is created (--command none)");
     } else {
         print "\nI do not know how to process the file ($command ?)\n\n";
     }
@@ -628,6 +677,17 @@ sub make_output_files_ro {
     system("chown $caller $sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/${output_file_basename}.* $dev_null");
     system("chown $caller $sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/${output_file_basename}-* $dev_null");
     system("chown $caller $sophomorix_config{'INI'}{'LATEX'}{'PRINT_PATH'}/${output_file_basename}_* $dev_null");
+}
+
+
+
+sub exit_on_build_error {
+    # Only after make_output_files_ro: the csv files with the passwords must
+    # not stay readable when the PDF failed
+    if ($build_error ne ""){
+        &log_script_exit($build_error,1,1,0,
+                         \@arguments,\%sophomorix_result,\%sophomorix_config,$json);
+    }
 }
 
 
